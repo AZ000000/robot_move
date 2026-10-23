@@ -44,7 +44,7 @@ const PHYS = (() => {
   function step(state, motorL, motorR, dt) {
 
     // 1. 电机输出 → 轮目标速度
-    const motorToSpeed = 0.8 / 65535;  // PWM_RES 满载 → 0.8 m/s
+    const motorToSpeed = 1.2;  // PID ±1.0 归一化驱动力 → ±1.2 m/s 满载
     const vL_target = motorL * motorToSpeed;
     const vR_target = motorR * motorToSpeed;
 

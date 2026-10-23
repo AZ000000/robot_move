@@ -30,7 +30,7 @@
     pidL: PID.create(),
     pidR: PID.create(),
 
-    phys: PHYS.create(0, 0, -Math.PI/2),   /* 朝上为正，初始 90° 指向画面上 */
+    phys: PHYS.create(0, 0, -Math.PI/2),  /* canvas y 向下，theta=-π/2 → sin=-1 → y 减小 → 画面"上方" */
 
     motorL_out: 0,   /* 最近一次 PID 输出 */
     motorR_out: 0,

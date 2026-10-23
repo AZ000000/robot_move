@@ -6,11 +6,11 @@
 const PID = (() => {
 
   const CFG = {
-    PID_KP: 0.8,
-    PID_KI: 0.02,
-    PID_KD: 0.15,
-    PWM_RES: 65535,
-    I_MAX:   5000
+    PID_KP: 0.35,
+    PID_KI: 1.2,
+    PID_KD: 0.01,
+    PWM_RES: 1.0,
+    I_MAX:   0.5
   };
 
   function create(kp, ki, kd) {

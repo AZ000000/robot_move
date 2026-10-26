@@ -61,45 +61,74 @@ static ringbuf_t  rx_rb;
 static uint8_t    rx_byte;          /* UART 单字节接收缓冲 */
 
 /* =============================================================
- *  HAL 桩函数：让 drivers/motor.c 里的 weak 覆盖生效
- *  把 PWM 计数值真正写进 TIMx->CCRx
+ *  HAL 对接桩函数 — 真正落地到 TB6612FNG
+ *
+ *  TB6612 每个通道的 IN1/IN2 组合决定方向：
+ *    IN1=HIGH, IN2=LOW  → 正转（CCW）
+ *    IN1=LOW,  IN2=HIGH → 反转（CW）
+ *    IN1=HIGH, IN2=HIGH → 短路制动
+ *    IN1=LOW,  IN2=LOW  → 短路制动（或高阻，取决于 PWM）
+ *
+ *  PWM 为 0 时 TB6612 输出天然高阻，不需要额外 GPIO 操作。
+ *
+ *  val 参数语义（来自 motor.c 抽象层）：
+ *    1    = 正转
+ *    0    = 反转
+ *    0xFE = 短路制动
+ *    0xFF = 自由停车（高阻，上层已把 PWM 清零）
  * ============================================================= */
 void motor_set_dir(motor_ch_t ch, uint8_t val)
 {
+    GPIO_PinState in1, in2;
+
+    switch (val) {
+        case 1:    in1 = GPIO_PIN_SET;   in2 = GPIO_PIN_RESET; break;  /* 正转 */
+        case 0:    in1 = GPIO_PIN_RESET; in2 = GPIO_PIN_SET;   break;  /* 反转 */
+        case 0xFE: in1 = GPIO_PIN_SET;   in2 = GPIO_PIN_SET;   break;  /* 短路制动 */
+        default:   in1 = GPIO_PIN_RESET; in2 = GPIO_PIN_RESET; break;  /* 自由停车 */
+    }
+
     switch (ch) {
-        case MOTOR_LEFT:
-            if (val == 1) {   /* 正转 */
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-            } else if (val == 0) {   /* 反转 */
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET);
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-            } else if (val == 0xFE) {   /* 短路制动 */
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_SET);
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-            } else {   /* 高阻 */
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET);
-                HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-            }
+        case MOTOR_LEFT:  /* TB6612 通道 A — AIN1/AIN2 */
+            HAL_GPIO_WritePin(TB6612_AIN1_PORT, TB6612_AIN1_PIN, in1);
+            HAL_GPIO_WritePin(TB6612_AIN2_PORT, TB6612_AIN2_PIN, in2);
             break;
-        case MOTOR_RIGHT:
-            /* PB3/PB4 对称，这里用 PB5/PB6 也行 */
+        case MOTOR_RIGHT: /* TB6612 通道 B — BIN1/BIN2 */
+            HAL_GPIO_WritePin(TB6612_BIN1_PORT, TB6612_BIN1_PIN, in1);
+            HAL_GPIO_WritePin(TB6612_BIN2_PORT, TB6612_BIN2_PIN, in2);
             break;
         default: break;
     }
 }
 
+/* ---------- PWM 输出：写 TIM->CCR ----------
+ *  TB6612 的 PWMA / PWMB 由 PWM 定时器硬驱动，不需要 GPIO 手动操作。
+ *  但 STBY 是软件控制的总使能，由 motor_set_enabled 负责。
+ */
 void motor_apply_raw(motor_ch_t ch, uint16_t pwm)
 {
     switch (ch) {
         case MOTOR_LEFT:
-            __HAL_TIM_SET_COMPARE(&htim_pwm_left, TIM_CHANNEL_3, pwm);
+            __HAL_TIM_SET_COMPARE(&htim_pwm_left, TIM_CHANNEL_3, pwm);   /* PB0 = TIM3 CH3 = PWMA */
             break;
         case MOTOR_RIGHT:
-            __HAL_TIM_SET_COMPARE(&htim_pwm_right, TIM_CHANNEL_4, pwm);
+            __HAL_TIM_SET_COMPARE(&htim_pwm_right, TIM_CHANNEL_4, pwm);  /* PB1 = TIM3 CH4 = PWMB */
             break;
         default: break;
     }
+}
+
+/* ---------- TB6612 STBY 总使能 ----------
+ *  motor.c 里 motor_set_enabled() 调我们这个 weak override。
+ *  拉低 STBY → TB6612 所有通道输出高阻（硬件紧急停）。
+ */
+void motor_set_enabled(uint8_t on)
+{
+    HAL_GPIO_WritePin(TB6612_STBY_PORT, TB6612_STBY_PIN,
+                      on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    /* 同时清掉两路 PWM（软件保险） */
+    __HAL_TIM_SET_COMPARE(&htim_pwm_left,  TIM_CHANNEL_3, 0);
+    __HAL_TIM_SET_COMPARE(&htim_pwm_right, TIM_CHANNEL_4, 0);
 }
 
 uint32_t cmd_now_ms(void)      { return HAL_GetTick(); }

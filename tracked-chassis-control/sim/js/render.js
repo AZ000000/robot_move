@@ -102,10 +102,10 @@ const Render = (() => {
   /* 画底盘：主体 + 两条履带 + 朝向箭头 + 轮子 */
   function drawChassis(s, cx, cy, ppm) {
     const wb  = PHYS.CFG.WHEELBASE_M;
-    const cw  = 0.20;   /* 车体宽度 m */
-    const cl  = 0.15;   /* 车体长度 m */
-    const track_w = 0.06;
-    const track_l = 0.22;
+    const track_w = PHYS.CFG.TRACK_WIDTH_M;
+    const track_l = PHYS.CFG.TRACK_LENGTH_M;
+    const cw  = Math.max(0.04, wb - 2 * track_w - 0.04);   /* 车体宽度 ≈ 中心距 - 两侧履带宽 - 间隙 */
+    const cl  = track_l + 0.03;                              /* 车体长度略长于履带 */
     const theta = s.phys.theta;
 
     // 四条关键点：左前后、右前后

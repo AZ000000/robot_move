@@ -204,20 +204,53 @@ vR = v + ω * WHEELBASE_M / 2;   // 右履带目标线速度
 
 ## 硬件方案与接线
 
-**推荐配置**：STM32F103C8T6（"蓝板"）+ TB6612（代码注释里写作 MTB6612）/ L298N 双 H 桥 + 带霍尔编码器的减速电机 × 2。
+**推荐配置**：STM32F103C8T6（"蓝板"）+ **TB6612FNG 双 H 桥**（本文所有代码以 TB6612 为目标硬件，L298N 可直接兼容，只是多出的一个方向脚不用接）+ 带霍尔编码器的减速电机 × 2（减速比 45，PPR 390）+ 金属驱动链轮 + 橡胶履带（单条长 8 cm、宽 3 cm）。
+
+TB6612FNG 真值表（每个独立通道，PWMA/AIN1/AIN2 或 PWMB/BIN1/BIN2）：
+
+| PWMA(PWMB) | AIN1 | AIN2 | 输出 |
+|------------|------|------|------|
+| HIGH | HIGH | LOW | 正转（CCW） |
+| HIGH | LOW | HIGH | 反转（CW） |
+| LOW | × | × | 高阻（自由停车，TB6612 天然特性） |
+| HIGH | HIGH | HIGH | 短路制动 |
+| HIGH | LOW | LOW | 短路制动 |
+
+`STBY` 脚必须**拉高**才能工作，拉低 = 所有通道输出高阻（硬件紧急停）。PWMA/PWMB 由 PWM 定时器硬驱动，方向由 `IN1/IN2` 组合决定，不是单一 DIR 脚。
 
 | 管脚 | 功能 | 用途 |
 |------|------|------|
+| **TB6612FNG** |||
+| PB5 | GPIO 输出 | `STBY` 总使能，高=工作、低=全部高阻（硬件紧急停，**必接**） |
+| PB0 | PWM 输出 | `PWMA` 左电机通道 A 的 PWM（接 TIM3 CH3） |
+| PB1 | PWM 输出 | `PWMB` 右电机通道 B 的 PWM（接 TIM3 CH4） |
+| PB3 | GPIO 输出 | `AIN1` 左电机方向脚 1 |
+| PB4 | GPIO 输出 | `AIN2` 左电机方向脚 2（与 AIN1 真值表决定正/反转/制动） |
+| PB6 | GPIO 输出 | `BIN1` 右电机方向脚 1 |
+| PB7 | GPIO 输出 | `BIN2` 右电机方向脚 2 |
+| **编码器** |||
 | PA0 / PA1 | TIM2 CH1/CH2 正交解码 | 左编码器 A / B 相 |
 | PA6 / PA7 | TIM3 CH1/CH2 正交解码 | 右编码器 A / B 相 |
-| PB0 | PWM 输出 | 左电机驱动 PWM |
-| PB1 | PWM 输出 | 右电机驱动 PWM |
-| PB3 | GPIO 输出 | 左电机方向 DIR |
-| PB4 | GPIO 输出 | 右电机方向 DIR |
-| PB5 | GPIO 输出 | 总使能 EN（拉低 = 紧急停，**必做**） |
+| **通信 / 可选** |||
 | PA9 / PA10 | USART1 TX / RX，115200 | 上位机 USB-TTL 或蓝牙 |
-| PB6 / PB7 | I²C1 SCL / SDA | MPU6050 航向（可选，用于航向闭环） |
+| PB8 / PB9 | I²C1 SCL / SDA | MPU6050 航向（可选，用于航向闭环） |
 | PA4 | ADC_IN4 | 履带张力模拟量（可选，防脱轨） |
+
+> 注意：TB6612 的 PWMA/PWMB 必须接**定时器 PWM 输出脚**，AIN1/AIN2/BIN1/BIN2 接普通 GPIO 即可。上述分配中 PB0/PB1 用 TIM3 CH3/CH4 输出 PWM，与编码器的 TIM2/TIM3 解码通道完全错开，无冲突。
+
+### TB6612 与 L298N 的对照
+
+如果手头是 L298N（没有 STBY，用 ENA/ENB 代替），接法对照：
+
+| TB6612 | L298N 对应 |
+|--------|------------|
+| STBY | ENA 并联 ENB（或只用一个 EN） |
+| PWMA → + 电机 A | ENA → + IN1/IN2 |
+| AIN1 / AIN2 | IN1 / IN2（逻辑相同） |
+| PWMB → + 电机 B | ENB → + IN3/IN4 |
+| BIN1 / BIN2 | IN3 / IN4 |
+
+代码里的 `chassis_config.h` 宏名保持 `TB6612_` 前缀，只要把引脚值换成你实际接的就行。
 
 > 注意：PWM 与编码器不能共用同一个定时器通道。上面的方案里 TIM2 只做左编码器、TIM3 只做右编码器、PWM 用独立定时器通道——实际分配以你的 `.ioc` 为准，只要改 `main.c` 的 `MX_*_Init()` 和 `motor_apply_raw()` 即可。
 
@@ -232,12 +265,12 @@ vR = v + ω * WHEELBASE_M / 2;   // 右履带目标线速度
    - 一个定时器输出 PWM（16 bit，`PWM_RES = 65535`）
    - 一个定时器做 100 Hz 更新中断（`CONTROL_HZ = 100`）
    - USART1 异步 115200，开全局中断
-   - PB3 / PB4 / PB5 推挽输出
+   - PB0/PB1 PWM 输出（PWMA/PWMB，TIM3 CH3/CH4）<br>   - PB3/PB4/PB6/PB7 推挽输出（AIN1/AIN2/BIN1/BIN2）<br>   - PB5 推挽输出（STBY）
 2. 生成代码（Toolchain = Makefile 或 MDK-ARM）。
 3. 把 `firmware/` 下所有 `.c/.h` 拷进生成工程的 `Core/Src`、`Core/Inc`（或新建 `Application` 分组）。
 4. 用 CubeMX 生成的 `SystemClock_Config()` / `MX_*_Init()` **替换** `main.c` 末尾的五个空桩函数。
 5. 在 `main.c` 里把 `htim_pwm_left` / `htim_pwm_right` / `htim_ctrl` / `huart1` 指向 CubeMX 生成的句柄。
-6. 补齐 `motor_set_dir()` 里 `MOTOR_RIGHT` 分支的 GPIO 操作（PB4 那一路）。
+6. 确认 `main.c` 里 `motor_set_dir()` 的 TB6612 通道 B（PB6/PB7 = BIN1/BIN2）方向逻辑正确、`motor_set_enabled()` 里 PB5 STBY 总使能生效。
 7. 编译烧录，串口发 `CMD:MOV,v=0.20,ω=0.00\r\n`，观察是否前进。
 
 > 上电顺序建议：先只接电机不接履带，确认方向和 PWM 正确；再接履带空转；最后落地。
@@ -250,18 +283,20 @@ vR = v + ω * WHEELBASE_M / 2;   // 右履带目标线速度
 
 | 参数 | 默认值 | 含义 / 怎么标定 |
 |------|--------|----------------|
-| `WHEELBASE_M` | 0.32 | 两侧履带中心距，卷尺量 |
-| `DRIVE_WHEEL_R_M` | 0.05 | 驱动链轮节圆半径 |
-| `V_MAX_MPS` | 0.8 | 实际满载最大速度，跑一次测 |
-| `PULSE_PER_REV` | 390 | 电机单相 PPR，查电机规格书 |
-| `GEAR_RATIO` | 98 | 减速箱减速比 |
-| `ENCODER_MULT` | 4 | 正交解码倍频（4×） |
-| `PWM_MIN_STATIONARY` | 800 | 电机刚开始转的最小 PWM（死区标定），否则 PID 小误差时电机不转 |
-| `PWM_SLEW_RATE` | 200 | 每周期 PWM 最大变化量，防电流尖峰 |
-| `MAX_ACCEL_MPS2` | 0.5 | 加速度上限，太大起步打滑 |
-| `MAX_DECEL_MPS2` | 1.0 | 减速度上限，可比加速更猛 |
+| `WHEELBASE_M` | 0.10 | 两侧履带中心距（m）：卷尺量，决定转弯半径。**仿真器 `sim/js/physics.js` 里的同名宏必须同步修改** |
+| `DRIVE_WHEEL_R_M` | 0.015 | 驱动链轮节圆半径（m）：量法 = 齿根圆 + (齿顶-齿根)/2，或 齿数×节距/(2π)。这个值**直接影响速度换算精度**，必须认真量 |
+| `TRACK_LENGTH_M` | 0.08 | 单条履带长度（m）：用于仿真器渲染，不进运动学公式 |
+| `TRACK_WIDTH_M` | 0.03 | 单条履带宽度（m）：渲染用 |
+| `V_MAX_MPS` | 0.8 | 实际满载最大直行速度（m/s）：空载跑一次测上限，别写超过实测值 |
+| `PULSE_PER_REV` | 390 | 电机编码器单相 PPR（= 霍尔线数）：查电机规格书 |
+| `GEAR_RATIO` | 45 | 减速箱总减速比 i：查减速箱铭牌或 `(电机转速)/(驱动轮转速)` |
+| `ENCODER_MULT` | 4 | 正交解码倍频（4×，STM32 默认），如果只接单相编码器改成 1 |
+| `PWM_MIN_STATIONARY` | 800 | 电机刚开始转的最小 PWM 计数值（死区）：先把 PWM 从 0 慢慢加，直到电机刚动，记下那个值。TB6612 在小占空比下可能启动抖动，死区很重要 |
+| `PWM_SLEW_RATE` | 200 | 每周期 PWM 最大变化量（±，计数值）：防电流尖峰导致 H 桥炸 |
+| `MAX_ACCEL_MPS2` | 0.5 | 加速度上限（m/s²）：太大起步打滑、电流冲高 |
+| `MAX_DECEL_MPS2` | 1.0 | 减速度上限（m/s²）：刹车可以比加速更猛一点 |
 | `PID_KP/KI/KD` | 0.8 / 0.02 / 0.15 | 见下方调参 |
-| `CMD_TIMEOUT_MS` | 500 | 上位机失联后自动停车时间 |
+| `CMD_TIMEOUT_MS` | 500 | 上位机失联自动停车时间（ms） |
 
 **编码器速度换算**（`encoder.c`）：
 
@@ -330,7 +365,6 @@ v = 2π·R · ticks / (PULSE_PER_REV × ENCODER_MULT × GEAR_RATIO × dt)
 ## 已知限制 / 后续可做
 
 - 固件的 `SystemClock_Config()` 等 5 个 HAL 初始化函数是空桩，必须由 CubeMX 生成替换。
-- `motor_set_dir()` 里 `MOTOR_RIGHT` 分支未实现（占位注释），移植时需补 PB4 的逻辑。
 - `encoder.c` 中"读 TIMx->CNT 求增量"的部分是占位（`enc_delta_this_cycle[]` 需由 HAL 层填充），速度换算常数 `K` 本身是完整可用的。
 - 三级电流 / 张力保护只有阈值宏，没有采样与判断代码。
 - `STEER_DIFF_MAX_OMEGA` / `STEER_BRAKE_MAX_OMEGA` 两个宏当前未被引用（见「三种转向模式」的说明）。

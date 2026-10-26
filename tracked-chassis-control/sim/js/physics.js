@@ -17,7 +17,9 @@
 const PHYS = (() => {
 
   const CFG = {
-    WHEELBASE_M: 0.32,
+    WHEELBASE_M: 0.10,       /* 与 firmware/core/chassis_config.h 保持一致 */
+    TRACK_LENGTH_M: 0.08,    /* 单条履带长度 8 cm，用户可调 */
+    TRACK_WIDTH_M: 0.03,     /* 履带宽 3 cm */
     GROUND_FRICTION: 0.02,     /* 每次 tick 速度衰减 (0~1) */
     MAX_V_MPS: 1.2,
     MAX_OMEGA_RADPS: 4.0

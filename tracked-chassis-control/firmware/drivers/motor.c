@@ -29,7 +29,7 @@ void motor_set_enabled(uint8_t on)
 {
     motor_enabled = on;
     if (!on) {
-        /* MTB6612 的 PWMA/PWMB 清零，或 L298N 的 ENA/ENB 拉低 */
+        /* TB6612FNG 的 PWMA/PWMB 清零，或 TB6612FNG 或 L298N 的 ENA/ENB 拉低 */
         for (int i = 0; i < MOTOR_COUNT; i++) motor_apply_raw(i, 0);
     }
 }
@@ -83,7 +83,7 @@ void motor_apply_slew(int32_t pwm_raw, motor_ch_t ch, motor_stop_mode_t stop)
                 ch, stop);
 }
 
-/* --------- 主动制动：DIR 拉成 HIGH-HIGH（MTB6612）或 LOW-LOW --------- */
+/* --------- 主动制动：DIR 拉成 HIGH-HIGH（TB6612FNG）或 LOW-LOW --------- */
 void motor_brake(motor_ch_t ch)
 {
     motor_set_dir(ch, 0xFE);   /* 特殊值，底层 HAL 识别为短路制动 */

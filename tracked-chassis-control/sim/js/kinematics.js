@@ -6,7 +6,7 @@
 const KIN = (() => {
 
   const CFG = {
-    WHEELBASE_M:         0.32,
+    WHEELBASE_M:         0.10,  /* 与 firmware/core/chassis_config.h 保持一致 */
     V_MAX_MPS:           0.8,
     OMEGA_MAX_RADPS:     2.0,
     STEER_DIFF_MAX_OMEGA: 0.5,

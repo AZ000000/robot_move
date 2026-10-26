@@ -7,18 +7,20 @@
 
 #include <stdint.h>
 
-/* --------- 几何参数 --------- */
-#define WHEELBASE_M       0.32f     /* 两侧履带中心距 L (m) */
-#define DRIVE_WHEEL_R_M   0.05f     /* 驱动轮 / 驱动链轮半径 (m) */
+/* --------- 几何参数（★ 改板子先改这组）--------- */
+#define WHEELBASE_M       0.10f     /* 两侧履带中心距 L (m)：10 cm，决定转弯半径 */
+#define DRIVE_WHEEL_R_M   0.015f    /* 驱动链轮节圆半径 (m)：量法 = 齿根圆半径 + (齿顶-齿根)/2，或 齿数×节距/2π */
+#define TRACK_LENGTH_M    0.08f     /* 单条履带长度 (m)：8 cm，仿真器渲染用 */
+#define TRACK_WIDTH_M     0.03f     /* 单条履带宽度 (m)：默认 3 cm，渲染用 */
 
 /* --------- 速度 / 负载 --------- */
 #define V_MAX_MPS         0.8f      /* 满载实测最大直行速度 (m/s) */
 #define OMEGA_MAX_RADPS   2.0f      /* 允许最大角速度 (rad/s) */
 
-/* --------- 电机 + 编码器 --------- */
-#define PULSE_PER_REV     390       /* 电机每转编码器 tick 数（单相） */
-#define GEAR_RATIO        98        /* 电机 → 驱动轮总减速比 */
-#define ENCODER_MULT      4         /* 正交解码后倍率（4x PPR） */
+/* --------- 电机 + 编码器（★ 按电机规格书填）--------- */
+#define PULSE_PER_REV     390       /* 电机每转编码器 tick 数（单相，= 霍尔 PPR） */
+#define GEAR_RATIO        45        /* 电机 → 驱动轮总减速比（减速箱 i） */
+#define ENCODER_MULT      4         /* 正交解码后倍率（4× PPR，STM32 默认） */
 
 /* --------- 定时器 --------- */
 #define PWM_RES           65535     /* PWM 计数值上限（16-bit 定时器） */
@@ -56,5 +58,44 @@
 /* --------- 串口 --------- */
 #define UART_BAUD           115200
 #define RINGBUF_SIZE        128      /* 命令环形缓冲区大小 */
+
+/* =============================================================
+ *  TB6612FNG 管脚分配
+ *
+ *    TB6612FNG 真值表（每个独立通道，PWMA/AIN1/AIN2 或 PWMB/BIN1/BIN2）：
+ *
+ *    PWMA(A/B)  |  AIN1  |  AIN2  |  OUT1/OUT2
+ *    -----------|--------|--------|------------
+ *      HIGH     |  HIGH  |  LOW   |  正转（CCW）
+ *      HIGH     |  LOW   |  HIGH  |  反转（CW）
+ *      LOW      |   ×    |   ×    |  高阻（自由停车）
+ *      HIGH     |  HIGH  |  HIGH  |  短路制动
+ *      HIGH     |  LOW   |  LOW   |  短路制动
+ *
+ *    STBY = PB5  →  高 = 正常工作，低 = 所有输出高阻（紧急停）
+ *    PWMA / PWMB 由 PWM 定时器（PB0 / PB1）驱动，频率建议 20~50 kHz
+ *    电机方向由 IN1/IN2 组合决定，不是"单 DIR 脚"
+ *
+ *    如果接的是 L298N（单 ENA + IN1 + IN2），TB6612 宏同样可用，
+ *    只是 EN = ENA，IN1/IN2 直接对应即可。
+ * ============================================================= */
+#define TB6612_STBY_PORT   GPIOB
+#define TB6612_STBY_PIN    GPIO_PIN_5   /* 总使能，接 STBY */
+
+/* 左电机通道 A */
+#define TB6612_PWMA_PORT   GPIOB
+#define TB6612_PWMA_PIN    GPIO_PIN_0   /* PWM（TIM3 CH3）*/
+#define TB6612_AIN1_PORT   GPIOB
+#define TB6612_AIN1_PIN    GPIO_PIN_3
+#define TB6612_AIN2_PORT   GPIOB
+#define TB6612_AIN2_PIN    GPIO_PIN_4
+
+/* 右电机通道 B */
+#define TB6612_PWMB_PORT   GPIOB
+#define TB6612_PWMB_PIN    GPIO_PIN_1   /* PWM（TIM3 CH4）*/
+#define TB6612_BIN1_PORT   GPIOB
+#define TB6612_BIN1_PIN    GPIO_PIN_6
+#define TB6612_BIN2_PORT   GPIOB
+#define TB6612_BIN2_PIN    GPIO_PIN_7
 
 #endif /* CHASSIS_CONFIG_H */

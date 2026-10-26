@@ -373,8 +373,8 @@ flowchart LR
     end
 
     subgraph HARD["硬件"]
-      M1["左侧电机<br/>L298N IN1/IN2 + PWM_A"]
-      M2["右侧电机<br/>L298N IN3/IN4 + PWM_B"]
+      M1["左侧电机<br/>TB6612FNG AIN1/AIN2 + PWMA"]
+      M2["右侧电机<br/>TB6612FNG BIN1/BIN2 + PWMB"]
       E1["左编码器<br/>GPIO EXTI"]
       E2["右编码器<br/>GPIO EXTI"]
       IMU["IMU (可选)<br/>I²C"]
@@ -417,7 +417,7 @@ flowchart LR
     <div class="pin-head">推荐型号</div>
     <div class="pin-head">选型理由</div>
     <div class="pin-row"><div>主控 MCU</div><div>STM32F103C8T6 / ESP32-S3 / STM32G431</div><div>32 位 + 足够定时器 + CAN 够用</div></div>
-    <div class="pin-row"><div>电机驱动</div><div>L298N (小功率) / MTB6612 (12V/1.2A) / BTS7960 (大功率)</div><div>H 桥双路，PWM 调速 + IN 控制方向</div></div>
+    <div class="pin-row"><div>电机驱动</div><div>TB6612FNG（12V/1.2A）/ L298N（小功率）/ BTS7960（大功率）</div><div>H 桥双路，PWM 调速 + IN 控制方向</div></div>
     <div class="pin-row"><div>电机</div><div>带编码器直流减速电机 (500~5000g·cm)</div><div>自带 AB 相正交编码器，P/R ≥ 300</div></div>
     <div class="pin-row"><div>编码器</div><div>电机自带或独立霍尔 / 光电</div><div>正交解码 EXTI 中断，方向可判</div></div>
     <div class="pin-row"><div>IMU</div><div>MPU6050 / BMI160</div><div>I²C，航向角闭环（可选，增强转向精度）</div></div>
@@ -439,7 +439,7 @@ flowchart LR
     <div class="pin-row"><div>PB1 (PWM)</div><div>TIM3 CH4</div><div>右电机驱动 PWM</div></div>
     <div class="pin-row"><div>PB3 (GPIO)</div><div>方向控制</div><div>左电机 DIR (IN1 对应)</div></div>
     <div class="pin-row"><div>PB4 (GPIO)</div><div>方向控制</div><div>右电机 DIR (IN3 对应)</div></div>
-    <div class="pin-row"><div>PB5</div><div>紧急停 (EN 全拉低)</div><div>L298N ENA / ENB 并联或软件控制</div></div>
+    <div class="pin-row"><div>PB5</div><div>紧急停 (EN 全拉低)</div><div>TB6612FNG STBY 接 PB5（高=工作、低=紧急停）</div></div>
     <div class="pin-row"><div>PA9 / PA10</div><div>USART1 TX / RX 115200</div><div>上位机 USB-TTL 或蓝牙</div></div>
     <div class="pin-row"><div>PB6 / PB7</div><div>I²C1 SCL / SDA</div><div>MPU6050 (可选)</div></div>
     <div class="pin-row"><div>PA4</div><div>ADC_IN4</div><div>张力模拟量 (可选)</div></div>
@@ -601,13 +601,13 @@ DIR  = (v_target ≥ 0) ? HIGH : LOW</div>
     </div>
   </div>
 
-  <h3>L298N 接线与真值表</h3>
+  <h3>TB6612FNG 接线与真值表</h3>
 
-  <p>L298N 每路有两个输入 IN1/IN2 决定方向，两个 EN 使能；MTB6612 用 PWM 脚调速 + 独立方向脚，接线更简单。推荐 <strong>MTB6612 方案</strong>。</p>
+  <p>TB6612FNG 每路有独立 PWM 调速脚（PWMA/PWMB）+ 两个方向脚（AIN1/AIN2 / BIN1/BIN2）+ 一个总 STBY 使能，比 L298N 多出「短路制动」和「硬件紧急停」两种工作状态，**强烈推荐**。</p>
 
   <table class="cmd-table">
     <thead>
-      <tr><th>MTB6612 接法</th><th>PWM</th><th>AIN1</th><th>AIN2</th><th>效果</th></tr>
+      <tr><th>TB6612FNG 接法</th><th>PWM</th><th>AIN1</th><th>AIN2</th><th>效果</th></tr>
     </thead>
     <tbody>
       <tr><td>前进</td><td>DUTY (%)</td><td>HIGH</td><td>LOW</td><td>电机正转</td></tr>

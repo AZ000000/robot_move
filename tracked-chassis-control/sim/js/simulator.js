@@ -129,11 +129,12 @@
       case 'RESET':
         PHYS.reset(state.phys);
         state.targetV = state.targetOmega = 0;
-        state.mode = 'DIFF';
+        state.smoothL_target = state.smoothR_target = 0;
         state.smoothL = state.smoothR = 0;
+        state.mode = 'DIFF';
         state.cmdNew = false;
         PID.reset(state.pidL); PID.reset(state.pidR);
-        return { ok: true, msg: 'RESET — 位置、速度、轨迹全部清零' };
+        return { ok: true, msg: 'RESET — 位置、速度、目标、轨迹全部清零' };
     }
     return { ok: false, msg: '未知命令' };
   }

@@ -38,8 +38,8 @@ const Render = (() => {
   function draw(state) {
     const s = state;
     const cx = s.phys.x, cy = s.phys.y;
-    const targetSpanX = Math.max(2.4, Math.abs(cx) + WORLD_MARGIN);
-    const targetSpanY = Math.max(2.4, Math.abs(cy) + WORLD_MARGIN);
+    const targetSpanX = Math.max(0.6, Math.abs(cx) + WORLD_MARGIN);
+    const targetSpanY = Math.max(0.6, Math.abs(cy) + WORLD_MARGIN);
     const ppm = Math.min(width / (targetSpanX * 2), height / (targetSpanY * 2));
 
     ctx.clearRect(0, 0, width, height);
